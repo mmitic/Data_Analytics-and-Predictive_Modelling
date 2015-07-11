@@ -1,0 +1,139 @@
+---
+title: "Basic Analytics 2"
+author: 'author: Dr. Marko Mitic'
+output: pdf_document
+---
+Problem Description: **AN ANALYTICAL DETECTIVE**
+
+Crime is an international concern, but it is documented and handled in very different ways in different countries. In the United States, violent crimes and property crimes are recorded by the Federal Bureau of Investigation (FBI).  Additionally, each city documents crime, and some cities release data regarding crime rates. The city of Chicago, Illinois releases crime data from 2001 onward here <https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-present/ijzp-q8t2>.
+
+Chicago is the third most populous city in the United States, with a population of over 2.7 million people. There are two main types of crimes in the city: violent crimes, and property crimes. In this problem, we'll focus on one specific type of property crime, called "motor vehicle theft" (sometimes referred to as grand theft auto). This is the act of stealing, or attempting to steal, a car. In this problem, we'll use some basic data analysis in R to understand the motor vehicle thefts in Chicago.
+
+Firstly, let explore the available dateset:
+
+```{r}
+GTA=read.csv("mvtWeek1.csv")
+str(GTA)
+```
+
+One can observe that the dataset has 191641 observations. The description of the 11 variables are as follows:
+
+- **ID**: a unique identifier for each observation
+- **Date**: the date the crime occurred
+- **LocationDescription**: the location where the crime occurred
+- **Arrest**: whether or not an arrest was made for the crime (TRUE if an arrest was made, and FALSE if an arrest was not made)
+- **Domestic**: whether or not the crime was a domestic crime, meaning that it was committed against a family member (TRUE if it was domestic, and FALSE if it was not domestic)
+- **Beat**: the area, or "beat" in which the crime occurred. This is the smallest regional division defined by the Chicago police department.
+- **District**: the police district in which the crime occured. Each district is composed of many beats, and are defined by the Chicago Police Department.
+- **CommunityArea**: the community area in which the crime occurred. Since the 1920s, Chicago has been divided into what are called "community areas" of which there are now 77. The community areas were devised in an attempt to create socially homogeneous regions.
+- **Year**: the year in which the crime occurred.
+- **Latitude**: the latitude of the location at which the crime occurred.
+- **Longitude**: the longitude of the location at which the crime occurred.
+
+Summary statiscs of each variable is what we want to explore next:
+
+```{r}
+summary(GTA)
+```
+
+Similarly to previous problem (Basic_Analytics1) the `Date` is a factor variable, so we want to transform it into a more convenient format:
+
+```{r}
+DateConvert = as.Date(strptime(GTA$Date, "%m/%d/%y %H:%M"))
+```
+
+Next, we transform the `Date` variable in the original dataframe. Months and days can be extracted from the variable `DateConvert` as follows:
+
+```{r}
+GTA$Date = DateConvert
+GTA$Month = months(DateConvert)
+GTA$Weekday = weekdays(DateConvert)
+```
+
+We can find the month in which most of the thefts has occured with (October)
+
+```{r}
+table(GTA$Month)
+```
+
+Similarly, Friday is the month in which most of the motor vehicle thefts occured:
+
+```{r}
+table(GTA$Weekday)
+```
+
+Next, we can explore the number of arrest per month and per day:
+
+```{r}
+table(GTA$Month, GTA$Arrest)
+table(GTA$Weekday, GTA$Arrest)
+```
+
+As it known, visualisations help understanding patterns in data better. We can plot histogram of the crimes to see general trend over time:\
+
+```{r}
+hist(GTA$Date, breaks = 100)
+```
+
+We can observe that crime decreses during 2005-2008 period, but increses during 2009-2011. Let's now plot boxplot to see other patterns:
+
+```{r}
+boxplot(GTA$Date ~ GTA$Arrest)
+```
+
+The `arrest boxplot` is located towards the bottom of the graph, which indicate that there were more crimes for which arrests were made in the first half of the time period. To further confirm this, we can determine proportion of the arrests in selected years:
+
+```{r}
+proportion = table(GTA$Arrest,GTA$Year)
+proportion2001 = proportion[2,1]/sum(proportion[,1])
+proportion2001
+proportion2007 = proportion[2,7]/sum(proportion[,7])
+proportion2007
+proportion2012 = proportion[2,12]/sum(proportion[,12])
+proportion2012
+```
+
+One can easily confirm that the arrests are conducted more frequently in the earlier years of the time period. Finally, we can analyze the locations in which the crimes happened (results suppressed due to reasons of clariness):
+
+```{r, results='hide'}
+sort(table(GTA$LocationDescription))
+```
+
+We can next subset a dataframe with 5 locations with most crimes:
+
+```{r}
+Top5=subset(GTA, GTA$LocationDescription=="STREET" | GTA$LocationDescription=="PARKING LOT/GARAGE(NON.RESID.)"
+            | GTA$LocationDescription=="ALLEY" | GTA$LocationDescription=="GAS STATION" 
+            | GTA$LocationDescription=="DRIVEWAY - RESIDENTIAL")
+str(Top5)
+```
+
+To make our tables a bit nicer to read, we can refresh this factor variable with:
+```{r}
+Top5$LocationDescription = factor(Top5$LocationDescription)
+```
+
+Finally, using `table` function on Top 5 we can observe that the most arrest happend on `Gas Station` location.
+
+```{r}
+table(Top5$Arrest, Top5$LocationDescription)
+str(Top5)
+```
+
+Using following code we can calculate proportion of the arrest conducted in Top5 locations:
+
+```{r}
+ans=table(Top5$Arrest, Top5$LocationDescription)
+
+rate=ans[2,]/colSums (ans, na.rm = FALSE, dims = 1)
+rate
+```
+
+
+Saturday is marked at the day with highest motor vehicle thefts at `Gas Station`. Interestingly, Saturday is the day in which fewest motor vehicle thefts in `residential driveways` location happened.
+
+```{r}
+
+table(Top5$Weekday, Top5$LocationDescription)
+
+```
