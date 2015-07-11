@@ -1,0 +1,153 @@
+---
+title: "Linear_Regression1"
+author: 'author: Dr. Marko Mitic'
+output: html_document
+---
+Problem Description: **READING TEST SCORES**
+
+
+The Programme for International Student Assessment (PISA) is a test given every three years to 15-year-old students from around the world to evaluate their performance in mathematics, reading, and science. This test provides a quantitative way to compare the performance of students from different parts of the world. In here, we will predict the reading scores of students from the United States of America on the 2009 PISA exam.
+
+The datasets pisa2009train.csv and pisa2009test.csv contain information about the demographics and schools for American students taking the exam, derived from 2009 PISA Public-Use Data Files (<http://nces.ed.gov/pubsearch/pubsinfo.asp?pubid=2011038>), distributed by the United States National Center for Education Statistics (NCES). While the datasets are not supposed to contain identifying information about students taking the test, by using the data you are bound by the NCES data use agreement, which prohibits any attempt to determine the identity of any student in the datasets.
+
+Each row in the datasets pisa2009train.csv and pisa2009test.csv represents one student taking the exam. The datasets have the following variables:
+
+-**grade**: The grade in school of the student (most 15-yearolds in America are in 10th grade)
+
+-**male**: Whether the student is male (1/0)
+
+-**raceeth**: The race/ethnicity composite of the student
+
+-**preschool**: Whether the student attended preschool (1/0)
+
+-**expectBachelors**: Whether the student expects to obtain a bachelor's degree (1/0)
+
+-**motherHS**: Whether the student's mother completed high school (1/0)
+
+-**motherBachelors**: Whether the student's mother obtained a bachelor's degree (1/0)
+
+-**motherWork**: Whether the student's mother has part-time or full-time work (1/0)
+
+-**fatherHS**: Whether the student's father completed high school (1/0)
+
+-**fatherBachelors**: Whether the student's father obtained a bachelor's degree (1/0)
+
+-**fatherWork**: Whether the student's father has part-time or full-time work (1/0)
+
+-**selfBornUS**: Whether the student was born in the United States of America (1/0)
+
+-**motherBornUS**: Whether the student's mother was born in the United States of America (1/0)
+
+-**fatherBornUS**: Whether the student's father was born in the United States of America (1/0)
+
+-**englishAtHome**: Whether the student speaks English at home (1/0)
+
+-**computerForSchoolwork**: Whether the student has access to a computer for schoolwork (1/0)
+
+-**read30MinsADay**: Whether the student reads for pleasure for 30 minutes/day (1/0)
+
+-**minutesPerWeekEnglish**: The number of minutes per week the student spend in English class
+
+-**studentsInEnglish**: The number of students in this student's English class at school
+
+-**schoolHasLibrary**: Whether this student's school has a library (1/0)
+
+-**publicSchool**: Whether this student attends a public school (1/0)
+
+-**urban**: Whether this student's school is in an urban area (1/0)
+
+-**schoolSize**: The number of students in this student's school
+
+-**readingScore**: The student's reading score, on a 1000-point scale
+
+
+
+By looking and the structure of the dataset, it is ovious that 3663 students are investigated in the training dataset. It also can be observed that many of the variables contain NA values.
+
+```{r}
+pisa2009train=read.csv("pisa2009train.csv")
+pisa2009test=read.csv("pisa2009test.csv")
+
+str(pisa2009train)
+```
+
+Next, using `tapply` function we can see the result of (for example) reading score by gender:
+
+```{r}
+tapply(pisa2009train$readingScore, pisa2009train$male, mean, na.rm=TRUE)
+```
+
+Linear regression discards observations with missing data, so we will remove all such observations from the training and testing sets:
+
+```{r}
+pisaTrain = na.omit(pisa2009train)
+pisaTest = na.omit(pisa2009test)
+```
+
+Because the race variable takes on text values, it was loaded as a factor variable when we read in the dataset with read.csv() -- you can see this when you run str(pisaTrain) or str(pisaTest). However, by default R selects the first level alphabetically ("American Indian/Alaska Native") as the reference level of our factor instead of the most common level ("White"). 
+
+```{r}
+pisaTrain$raceeth = relevel(pisaTrain$raceeth, "White")
+pisaTest$raceeth = relevel(pisaTest$raceeth, "White")
+```
+
+You can observe this by unning `str` command
+
+```{r}
+str(pisaTrain$raceeth)
+```
+
+
+Finally, let us build linear model for prediction of readingScore as dependent variable using `lm` function:
+
+```{r}
+lmScore =lm(readingScore ~., data=pisaTrain)
+summary(lmScore)
+```
+
+Multiple R-squared value of lmScore which is relatively low. This does not necessarily imply that the model is of poor quality. More often than not, it simply means that the prediction problem at hand (predicting a student's test score based on demographic and school-related variables) is more difficult than other prediction problems.
+
+Root mean squared error (RMSE) on the trainin data can be easily calculated with:
+```{r}
+RMSE = sqrt(mean(lmScore$residuals^2))
+RMSE
+```
+
+Using the `predict` function and supplying the "newdata" argument, we can use the lmScore model to predict the reading scores of students in pisaTest
+
+```{r}
+predTest = predict(lmScore, newdata = pisaTest)
+summary(predTest)
+```
+
+Next, we can caluclate Sum of squared errors (SSE) and RMSE on test dataset. Note that we have to subtract predicted and real values as follows:
+
+```{r}
+SSE = sum((predTest-pisaTest$readingScore)^2)
+SSE
+RMSE = sqrt(SSE/nrow(pisaTest))
+RMSE
+```
+
+As expected, RMSE on test set is somewhat higher. It is interestingly to see the accuracy of our predictions comparing to the baseline model (which always gives the most frequent answer):
+
+```{r}
+baseline = mean(pisaTrain$readingScore)
+baseline
+```
+
+Comparing this with men value in predTest, we can see that our model is slightly better. We also can compare sum of squared error on the baseline model (also called total sum of squares - SST):
+
+```{r}
+SST = sum((pisaTest$readingScore-mean(pisaTrain$readingScore))^2)
+SST
+```
+
+The significant difference between SSE and SST gives us some confident that our model is solid. Finally, we can confirm this by calculatin R-squared in test set:
+
+```{r}
+R2=1-SSE/SST
+R2
+```
+
+This is relatively low value, but as mentioned above, the problem is too complex to be solved with simple technique such as linear regression. Further investigation mustinclude logistic regression, CART models, regression trees or neural networks in finding the best possible model.
