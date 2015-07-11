@@ -1,7 +1,7 @@
 ---
 title: "Linear_Regression1"
 author: 'author: Dr. Marko Mitic'
-output: html_document
+output: pdf_document
 ---
 Problem Description: **READING TEST SCORES**
 
@@ -62,7 +62,7 @@ Each row in the datasets pisa2009train.csv and pisa2009test.csv represents one s
 
 
 
-By looking and the structure of the dataset, it is ovious that 3663 students are investigated in the training dataset. It also can be observed that many of the variables contain NA values.
+By looking and the structure of the dataset, it is obvious that 3663 students are investigated in the training dataset. It also can be observed that many of the variables contain NA values.
 
 ```{r}
 pisa2009train=read.csv("pisa2009train.csv")
