@@ -1,0 +1,230 @@
+---
+title: "Text Analytics 1"
+author: 'author: Dr. Marko Mitic'
+output: pdf_document
+---
+Problem Description: **SEPARATING SPAM FROM HAM**
+
+Nearly every email user has at some point encountered a "spam" email, which is an unsolicited message often advertising a product, containing links to malware, or attempting to scam the recipient. Roughly 80-90% of more than 100 billion emails sent each day are spam emails, most being sent from botnets of malware-infected computers. The remainder of emails are called "ham" emails.
+
+As a result of the huge number of spam emails being sent across the Internet each day, most email providers offer a spam filter that automatically flags likely spam messages and separates them from the ham. Though these filters use a number of techniques (e.g. looking up the sender in a so-called "Blackhole List" that contains IP addresses of likely spammers), most rely heavily on the analysis of the contents of an email via text analytics.
+
+We will build and evaluate a spam filter using a publicly available dataset first described in the 2006 conference paper "Spam Filtering with Naive Bayes -- Which Naive Bayes?" by V. Metsis, I. Androutsopoulos, and G. Paliouras. The "ham" messages in this dataset come from the inbox of former Enron Managing Director for Research Vincent Kaminski, one of the inboxes in the Enron Corpus. One source of spam messages in this dataset is the SpamAssassin corpus, which contains hand-labeled spam messages contributed by Internet users. The remaining spam was collected by Project Honey Pot, a project that collects spam messages and identifies spammers by publishing email address that humans would know not to contact but that bots might target with spam. The full dataset we will use was constructed as roughly a 75/25 mix of the ham and spam messages.
+
+The dataset contains just two fields:
+
+- **text**: The text of the email.
+- **spam**: A binary variable indicating if the email was spam.
+
+Firsty, let us load the dataset and inspect its structure:
+```{r}
+emails = read.csv("emails.csv", stringsAsFactors=FALSE)
+str(emails)
+```
+
+We can observe the ham(no spam)-spam ratio in the dataset:
+```{r}
+table(emails$spam)
+```
+
+Longest e-mail contains ~ 44k characters, which is evident using:
+```{r}
+max(nchar(emails$text))
+```
+
+Shortest mail is located in the following line:
+```{r}
+which.min(nchar(emails$text))
+```
+
+We will now use the **bag of words** approach to build a model. Following procedure given below we can build and pre-process the corpus:
+
+```{r}
+#install.packages("tm")
+library(tm)
+corpus = Corpus(VectorSource(emails$text))
+
+corpus=tm_map(corpus, tolower)
+corpus = tm_map(corpus, PlainTextDocument)
+corpus = tm_map(corpus, removePunctuation)
+corpus = tm_map(corpus, removeWords, stopwords("english"))
+corpus = tm_map(corpus, stemDocument)
+
+dtm = DocumentTermMatrix(corpus)
+dtm
+```
+
+DTM matrix contains over 28k items. To obtain a more reasonable number of terms, we'll limit dtm to contain terms appearing in at least 5% of documents:
+
+```{r}
+spdtm = removeSparseTerms(dtm, 0.95)
+spdtm
+```
+
+From this, we can define new data frame `emailsSparse`. 
+```{r}
+emailsSparse = as.data.frame(as.matrix(spdtm))
+colnames(emailsSparse) = make.names(colnames(emailsSparse))
+```
+
+The most frequent word stem is obtained with
+```{r}
+sort(which.max(colSums(emailsSparse)))
+```
+
+Next, we want to add spam variable to the new datet. 
+```{r}
+emailsSparse$spam = emails$spam
+```
+
+We can find word stems that appear at least 5000 times in non-spam messages:
+```{r}
+first = subset(emailsSparse, emailsSparse$spam==0)
+sort(colSums(first)>5000) #or sum(colSums(first)>5000)
+```
+
+Likewise, we can determine word stems that appear at least 1000 times in spam messages:
+
+```{r}
+firstspam = subset(emailsSparse, emailsSparse$spam==1)
+sort(colSums(firstspam)>=1000)
+```
+
+After this quick analysis, we can start building our models:
+
+Firstly, we must set `spam` variable to be a factor:
+
+```{r}
+emailsSparse$spam = as.factor(emailsSparse$spam)
+```
+
+Next, we'll devide dateset into training and testing:
+```{r}
+#install.packages("caTools")
+library(caTools)
+set.seed(123)
+spl = sample.split(emailsSparse$spam, SplitRatio = 0.7)
+train = subset(emailsSparse, spl == T)
+test = subset(emailsSparse, spl == F)
+```
+
+Using the training set, we'll train the following three machine learning models. The models should predict the dependent variable "spam", using all other available variables as independent variables. 
+
+1) Logistic regression
+```{r}
+spamLog = glm(spam ~., data=train, family="binomial")
+pred = predict(spamLog, type="response")
+```
+
+2) CART model
+```{r}
+# install.packages("rpart")
+library(rpart)
+spamCART = rpart(spam~., data=train, method="class")
+predCART = predict(spamCART)
+predCART.prob = predCART[,2]
+```
+
+3) Random Forest
+```{r}
+# install.packages("randomForest")
+library(randomForest)
+set.seed(123)
+spamRF =  randomForest(spam~., data=train)
+predRF = predict(spamRF, type = "prob")
+predRF.prob = predRF[,2]
+```
+Interestingly, we find that none of the  variables are labeled as significant (at the p=0.05 level) for logistic regression:
+```{r}
+summary(spamLog)
+```
+
+However, we find that the accuracyof the model is pretty high:
+```{r}
+table(train$spam, pred>0.5)
+(3052+954)/(3052+954+4)
+```
+
+This can also be confirmed with AUC number:
+
+```{r}
+# install.packages("ROCR")
+library(ROCR)
+predROCR = prediction(pred, train$spam)
+
+AUC = as.numeric(performance(predROCR, "auc")@y.values)
+AUC
+```
+
+For our CART model, we should first plot the CART tree to see how many levels it got.
+```{r}
+# install.packages("rpart.plot")
+library(rpart.plot)
+prp(spamCART)
+```
+
+The accuracy for this model can be easily calculated:
+```{r}
+table(train$spam, predCART.prob>0.5 )
+(2885+894)/nrow(train)
+```
+
+The AUC for CART model is calculated as follows:
+```{r}
+predROCR = prediction(predCART.prob, train$spam)
+ROCRperf=performance(predROCR, "tpr", "fpr")
+plot(ROCRperf, colorize=T, print.cutoffs.at=seq(0,1,0.1), text.adj=c(-0.2,1.7))
+
+AUC = as.numeric(performance(predROCR, "auc")@y.values)
+AUC
+```
+
+Finally, we can obtain accuracy of our Random Forest model:
+```{r}
+table(train$spam, predRF.prob>0.5 )
+(3013+914)/nrow(train)
+```
+Similar trend is obvious by calculating AUC number:
+
+```{r}
+predROCR = prediction(predRF.prob, train$spam)
+ROCRperf=performance(predROCR, "tpr", "fpr")
+plot(ROCRperf, colorize=T, print.cutoffs.at=seq(0,1,0.1), text.adj=c(-0.2,1.7))
+AUC = as.numeric(performance(predROCR, "auc")@y.values)
+AUC
+```
+ 
+We can conclude that Logistic Regression model gave best accuracy on the training set. However, we need to give them a real challange with the created test set. Similrly, we can calculate accuracy and AUC values for each model:
+
+```{r}
+pred = predict(spamLog, newdata=test, type="response")
+table(test$spam, pred>0.5)
+(1257+376)/nrow(test)
+
+predROCR = prediction(pred, test$spam)
+AUC = as.numeric(performance(predROCR, "auc")@y.values)
+AUC
+```
+
+```{r}
+predTestCART = predict(spamCART, newdata=test)[,2]
+table(test$spam, predTestCART>0.5)
+(1228+386)/nrow(test)
+
+predROCR = prediction(predTestCART , test$spam)
+AUC = as.numeric(performance(predROCR, "auc")@y.values)
+AUC
+```
+
+```{r}
+predTestRF = predict(spamRF, newdata=test, type="prob")[,2]
+table(test$spam, predTestRF>0.5)
+(1290+385)/nrow(test)
+
+predROCR = prediction(predTestRF , test$spam)
+AUC = as.numeric(performance(predROCR, "auc")@y.values)
+AUC 
+```
+
+We can conlclude that both CART and Random Forest had very similar accuracies on the training and testing sets. However, logistic regression obtained nearly perfect accuracy and AUC on the training set and had far-from-perfect performance on the testing set. 
+This is a clear indicator of overfitting in case of Logistic Regression, so for this problem Random Forest model seems to be an optimal solution.
