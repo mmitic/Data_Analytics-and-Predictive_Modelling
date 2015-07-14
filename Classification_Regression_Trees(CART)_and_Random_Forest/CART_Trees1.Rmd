@@ -1,0 +1,196 @@
+---
+title: "Classification and Regression Trees 1"
+author: 'author: Dr. Marko Mitic'
+output: pdf_document
+---
+Problem Description: **PREDICTING EARNINGS FROM CENSUS DATA**
+
+The United States government periodically collects demographic information by conducting a census.
+
+In this problem, we are going to use census information about an individual to predict how much a person earns -- in particular, whether the person earns more than $50,000 per year. This data comes from the UCI Machine Learning Repository <http://archive.ics.uci.edu/ml/datasets/Adult>.
+
+The file census.csv contains 1994 census data for 31,978 individuals in the United States.
+
+The dataset includes the following 13 variables:
+
+- **age** = the age of the individual in years
+
+- **workclass** = the classification of the individual's working status (does the person work for the federal government, work for the local government, work without pay, and so on)
+
+- **education** = the level of education of the individual (e.g., 5th-6th grade, high school graduate, PhD, so on)
+
+- **maritalstatus** = the marital status of the individual
+
+- **occupation** = the type of work the individual does (e.g., administrative/clerical work, farming/fishing, sales and so on)
+
+- **relationship** = relationship of individual to his/her household
+
+- **race** = the individual's race
+
+- **sex** = the individual's sex
+
+- **capitalgain** = the capital gains of the individual in 1994 (from selling an asset such as a stock or bond for more than the original purchase price)
+
+- **capitalloss** = the capital losses of the individual in 1994 (from selling an asset such as a stock or bond for less than the original purchase price)
+
+- **hoursperweek** = the number of hours the individual works per week
+
+- **nativecountry** = the native country of the individual
+
+- **over50k** = whether or not the individual earned more than $50,000 in 1994
+
+Firstly, let's begin by building a logistic regression model to predict whether an individual's earnings are above $50,000 (the variable "over50k") using all of the other variables as independent variables. Read the dataset census.csv into R.
+
+Next, let's split the data randomly into a training set and a testing set, setting the seed to 2000 before creating the split. The data is splitted in such a way that the training set contains 60% of the observations, while the testing set contains 40% of the observations.
+
+We want to build a logistic regression model to predict the dependent variable "over50k", using all of the other variables in the dataset as independent variables. We'll use the training set to build the model.
+
+```{r}
+census = read.csv("census.csv")
+str(census)
+
+#install.packages("caTools")
+library(caTools)
+set.seed(2000)
+split = sample.split(census$over50k, SplitRatio = 0.6)
+train = subset(census, split == T)
+test = subset(census, split == F)
+
+LogReg = glm(over50k~., data = train, family = "binomial")
+summary(LogReg)
+```
+
+Firstly, we can observe the `warning` message that indicates that our model is overfitting due to large number of independent variables. By typing `summary` command, we find that practically every variable except of `race` and `nativecountry` is significat (we use p-value treshold of 0.1). The accuracy of our logistic regression model can be determined on the test set:
+
+```{r}
+pred = predict(LogReg, newdata = test, type = "response")
+table(test$over50k, pred>0.5)
+
+ACU = (9051+1888)/nrow(test)
+ACU
+```
+
+This must be compared to the baseline model as follows:
+
+```{r}
+table(test$over50k)
+ACU = 9713/nrow(test)
+ACU
+```
+
+The results confirm that our model is good and that is fairly better than baseline model. This can be further confirmed using ROCR and AUC:
+
+```{r}
+#install.packages("ROCR")
+library(ROCR)
+ROCpred2 = prediction(pred, test$over50k)
+ROCRperf2=performance(ROCpred2, "tpr", "fpr")
+plot(ROCRperf2, colorize=T, print.cutoffs.at=seq(0,1,0.1), text.adj=c(-0.2,1.7))
+
+AUC = as.numeric(performance(ROCpred2, "auc")@y.values)
+AUC
+
+```
+
+Let us now build a classification tree to predict "over50k". We'll use the training set to build the model, and all of the other variables as independent variables. 
+
+```{r}
+#install.packages("rpart")
+library(rpart)
+#install.packages("rpart.prp")
+library(rpart.plot)
+CART = rpart(over50k~., data = train, method = "class")
+prp(CART)
+```
+
+We can observe that the CART tree has 4 split, with relationship variable on top. Next, we're going to calculate accuracy of the CART model on test set:
+
+```{r}
+pred = predict(CART, newdata = test, type="class")
+
+table(test$over50k, pred)
+ACU =(9243+1596)/nrow(test)
+ACU
+```
+
+This highlights a very regular phenomenon when comparing CART and logistic regression. CART often performs a little worse than logistic regression in out-of-sample accuracy. However, as is the case here, the CART model is often much simpler to describe and understand.
+
+Let us now consider the ROC curve and AUC for the CART model on the test set. They can be easily obtained:
+
+```{r}
+pred2 = predict(CART, newdata = test)
+ROCpred3 = prediction(pred2[,2], test$over50k)
+ROCRperf3=performance(ROCpred3, "tpr", "fpr")
+plot(ROCRperf3, colorize=T, print.cutoffs.at=seq(0,1,0.1), text.adj=c(-0.2,1.7))
+
+AUC = as.numeric(performance(ROCpred3, "auc")@y.values)
+AUC
+```
+
+Before building a random forest model, we'll down-sample our training set. While some modern personal computers can build a random forest model on the entire training set, others might run out of memory when trying to train the model since random forests is much more computationally intensive than CART or Logistic Regression. For this reason, before continuing we will define a new training set to be used when building our random forest model, that contains 2000 randomly selected obervations from the original training set. 
+
+```{r}
+set.seed(1)
+trainSmall = train[sample(nrow(train), 2000), ]
+```
+
+Let us now build a random forest model to predict "over50k", using the dataset "trainSmall" as the data used to build the model. 
+
+
+```{r}
+#install.packages("randomForest")
+library(randomForest)
+set.seed(1)
+rf = randomForest(over50k ~., data=trainSmall)
+```
+
+The accuracy of the model on the test set can be determined through:
+
+```{r}
+pred2 = predict(rf, newdata=test)
+table(test$over50k, pred2)
+ACU = (9586+1093)/nrow(test)
+ACU
+```
+
+Random forest models work by building a large collection of trees. As a result, we lose some of the interpretability that comes with CART in terms of seeing how predictions are made and which variables are important. However, we can still compute metrics that give us insight into which variables are important.
+
+One metric that we can look at is the number of times, aggregated over all of the trees in the random forest model, that a certain variable is selected for a split. To view this metric, run the following lines of R code (replace "MODEL" with the name of your random forest model):
+
+```{r}
+vu = varUsed(rf, count=TRUE)
+vusorted = sort(vu, decreasing = FALSE, index.return = TRUE)
+dotchart(vusorted$x, names(rf$forest$xlevels[vusorted$ix]))
+```
+
+A different metric we can look at is related to "impurity", which measures how homogenous each bucket or leaf of the tree is. In each tree in the forest, whenever we select a variable and perform a split, the impurity is decreased. Therefore, one way to measure the importance of a variable is to average the reduction in impurity, taken over all the times that variable is selected for splitting in all of the trees in the forest.  This is evident using:
+
+```{r}
+varImpPlot(rf)
+```
+
+Finally, we can improve our CART model by tuning its parameters. 
+Let us select the cp parameter for our CART model using k-fold cross validation, with k = 10 folds. We should test cp values from 0.002 to 0.1 in 0.002 increments, by using the following command:
+
+```{r}
+#install.packages("caret")
+library(caret)
+set.seed(2)
+tr.control = trainControl(method="cv", number=10)
+cartGrid = expand.grid( .cp = seq(0.002,0.1,0.002))
+tr = train(over50k ~., data=train, method="rpart", trControl=tr.control, tuneGrid = cartGrid)
+tr
+```
+
+Obviously, cp = 0.002 gives best accuracy. We can now import this parameter into the CART model:
+```{r}
+CART = rpart(over50k~., data = train, method = "class", cp = 0.002)
+prp(CART)
+
+pred = predict(CART, newdata = test, type="class")
+table(test$over50k, pred)
+ACU = (9178+1838)/nrow(test)
+ACU
+```
+
+By tuning cp, we improved our accuracy by over 1%, but our tree became significantly more complicated. In some applications, such an improvement in accuracy would be worth the loss in interpretability. In others, we may prefer a less accurate model that is simpler to understand and describe over a more accurate -- but more complicated -- model.
