@@ -1,0 +1,124 @@
+---
+title: "Logistic_Regression1"
+author: 'author: Dr. Marko Mitic'
+output: pdf_document
+---
+Problem Description: **PREDICTING PAROLE VIOLATORS**
+
+In many criminal justice systems around the world, inmates deemed not to be a threat to society are released from prison under the parole system prior to completing their sentence. They are still considered to be serving their sentence while on parole, and they can be returned to prison if they violate the terms of their parole.
+
+Parole boards are charged with identifying which inmates are good candidates for release on parole. They seek to release inmates who will not commit additional crimes after release. In this problem, we will build and validate a model that predicts if an inmate will violate the terms of his or her parole. Such a model could be useful to a parole board when deciding to approve or deny an application for parole.
+
+For this prediction task, we will use data from the United States 2004 National Corrections Reporting Program <http://www.icpsr.umich.edu/icpsrweb/NACJD/series/38/studies/26521?archive=NACJD&sortBy=7>, a nationwide census of parole releases that occurred during 2004. We limited our focus to parolees who served no more than 6 months in prison and whose maximum sentence for all charges did not exceed 18 months. The dataset contains all such parolees who either successfully completed their term of parole during 2004 or those who violated the terms of their parole during that year. The dataset contains the following variables:
+
+-**male**: 1 if the parolee is male, 0 if female
+
+-**race**: 1 if the parolee is white, 2 otherwise
+
+-**age**: the parolee's age (in years) when he or she was released from prison
+
+-**state**: a code for the parolee's state. 2 is Kentucky, 3 is Louisiana, 4 is Virginia, and 1 is any other state. The three states were selected due to having a high representation in the dataset.
+
+-**time.served**: the number of months the parolee served in prison (limited by the inclusion criteria to not exceed 6 months).
+
+-**max.sentence**: the maximum sentence length for all charges, in months (limited by the inclusion criteria to not exceed 18 months).
+
+-**multiple.offenses**: 1 if the parolee was incarcerated for multiple offenses, 0 otherwise.
+
+-**crime**: a code for the parolee's main crime leading to incarceration. 2 is larceny, 3 is drug-related crime, 4 is driving-related crime, and 1 is any other crime.
+
+-**violator**: 1 if the parolee violated the parole, and 0 if the parolee completed the parole without violation.
+
+
+First, let us observe the structure of the data:
+```{r}
+parole = read.csv("parole.csv")
+str(parole)
+```
+
+We can observe that the dataframe has 675 parolees in total. The number of the parolees who violated the terms of their parole is:
+
+```{r}
+table(parole$violator)
+```
+
+Statistical summary of the dataframe can be obtained using `summary` command:
+
+```{r}
+summary(parole)
+```
+
+Before building a model, we need to conver unordered factors in datase into factor variables. This can easily be done with `as.factor()` as follows:
+
+```{r}
+parole$state=as.factor(parole$state)
+parole$crime=as.factor(parole$crime)
+```
+
+Next, we can devide our dataset into training and testing set (70/30 ratio). In order to enable that our results are reproducible, we firstly set the seed. 
+
+```{r}
+#install.packages("caTools")
+library(caTools)
+
+set.seed(144)
+split = sample.split(parole$violator, SplitRatio = 0.7)
+train = subset(parole, split == TRUE)
+test = subset(parole, split == FALSE)
+```
+
+We can now develop our first logistic regression model
+
+```{r}
+model1 = glm(violator~., data=train, family="binomial")
+summary(model1)
+```
+
+From `summary` command we can observe the signifact variables (for which p-value is under 0.05). We can then caluclate predictions
+
+```{r}
+pred = predict(model1, newdata=test, type="response")
+```
+
+Maximum predicted probability of violation can be easily calculated
+
+```{r}
+max(pred)
+```
+
+Accuracy, sensitivity and specificity of the model are obtained from confusion matrix:
+```{r}
+table(test$violator, pred>0.5)
+
+ACC=(167+12)/(167+12+11+12)
+ACC
+SE=12/(11+12)
+SE
+SP=167/(167+12)
+SP
+```
+
+We can now compary the accuracy of our model with baseline predictions:
+
+```{r}
+table(test$violator) #baseline
+179/(179+23)
+```
+
+One of the way of improving our model is evident from the confusion matrix. The parole board assigns more cost to a false negative than a false positive, and should therefore use a logistic regression cutoff less than 0.5. Althoough the model is likely of value to the board, and using a different logistic regression cutoff is likely to improve the model's value.
+
+If the board used the model for parole decisions, a negative prediction would lead to a prisoner being granted parole, while a positive prediction would lead to a prisoner being denied parole. The parole board would experience more regret for releasing a prisoner  who then violates parole (a negative prediction that is actually positive, or false negative) than it would experience for denying parole to a prisoner  who would not have violated parole (a positive prediction that is actually negative, or false positive).Decreasing the cutoff leads to more positive predictions, which increases false positives and decreases false negatives. Meanwhile, increasing the cutoff leads to more negative predictions, which increases false negatives and decreases false positives. The parole board assigns high cost to falsenegatives, and therefore should decrease the cutoff.
+
+Finally, we can plot ROCR (ratio between false positives and true positives), and calculate AUC (Area Under the Curve) using `ROCR` package:
+
+```{r}
+library("ROCR")
+
+ROCpred = prediction(pred, test$violator)
+ROCRperf=performance(ROCpred, "tpr", "fpr")
+
+plot(ROCRperf, colorize=T, print.cutoffs.at=seq(0,1,0.1), text.adj=c(-0.2,1.7))
+
+AUC = as.numeric(performance(ROCpred, "auc")@y.values)
+AUC
+```
