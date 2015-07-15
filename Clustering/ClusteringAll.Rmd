@@ -1,0 +1,212 @@
+---
+title: "Clustering"
+author: "Dr. Marko Mitic"
+output: pdf_document
+---
+
+Problem 1: **DOCUMENT CLUSTERING WITH DAILY KOS**
+
+Document clustering, or text clustering, is a very popular application of clustering algorithms. A web search engine, like Google, often returns thousands of results for a simple query. For example, if you type the search term "jaguar" into Google, around 200 million results are returned. This makes it very difficult to browse or find relevant information, especially if the search term has multiple meanings. If we search for "jaguar", we might be looking for information about the animal, the car, or the Jacksonville Jaguars football team. 
+
+Clustering methods can be used to automatically group search results into categories, making it easier to find relavent results. This method is used in the search engines PolyMeta and Helioid, as well as on FirstGov.gov, the official Web portal for the U.S. government. The two most common algorithms used for document clustering are Hierarchical and k-means. 
+
+In this problem, we'll be clustering articles published on Daily Kos <https://www.dailykos.com/>, an American political blog that publishes news and opinion articles written from a progressive point of view. Daily Kos was founded by Markos Moulitsas in 2002, and as of September 2014, the site had an average weekday traffic of hundreds of thousands of visits. 
+
+The file dailykos.csv contains data on 3,430 news articles or blogs that have been posted on Daily Kos. These articles were posted in 2004, leading up to the United States Presidential Election. The leading candidates were incumbent President George W. Bush (republican) and John Kerry (democratic). Foreign policy was a dominant topic of the election, specifically, the 2003 invasion of Iraq. 
+
+Each of the variables in the dataset is a word that has appeared in at least 50 different articles (1,545 words in total). The set of  words has been trimmed according to some of the techniques covered in the previous week on text analytics (punctuation has been removed, and stop words have been removed). For each document, the variable values are the number of times that word appeared in the document. 
+
+
+Let's start by building a hierarchical clustering model. 
+
+```{r}
+dailykos = read.csv("dailykos.csv")
+str(dailykos)
+distance = dist(dailykos, method = "euclidean")
+cluster = hclust(distance, method = "ward.D")
+```
+
+The computation may take some time, since we have lots of observations and variables in the dataset. Let us next plot the dendogram:
+```{r}
+plot(cluster)
+```
+
+The choices 2 and 3 are good cluster choices according to the dendrogram, because there is a lot of space between the horizontal lines in the dendrogram in those cut off spots (draw a horizontal line across the dendrogram where it crosses 2 or 3 vertical lines). This can be shown by using `rect.hist` function for drawing cluster:
+
+```{r}
+plot(cluster)
+rect.hclust(cluster, k=3, border="red")
+```
+
+However, just thinking about the application, it is probably better to show the reader more categories than 2 or 3. These categories would probably be too broad to be useful. Seven or eight categories seems more reasonable. Let us next subset each of the seven clusters:
+
+```{r}
+clusterGroups =cutree(cluster, k = 7)
+cluster1 = subset(dailykos, clusterGroups == 1)
+cluster2 = subset(dailykos, clusterGroups == 2)
+cluster3 = subset(dailykos, clusterGroups == 3)
+cluster4 = subset(dailykos, clusterGroups == 4)
+cluster5 = subset(dailykos, clusterGroups == 5)
+cluster6 = subset(dailykos, clusterGroups == 6)
+cluster7 = subset(dailykos, clusterGroups == 7)
+```
+
+By using `str` function we observe that cluster1 contains most observations, while cluster4 has lowest number of them. We can also see the frequency for each varaible in each cluster. Combination of `tail`, `sort` and `colMeans` computes the mean frequency values of each of the words in cluster, and then outputs the 6 words that occur the most frequently. The colMeans function computes the column (word) means, the sort function orders the words in increasing order of the mean values, and the tail function outputs the last 6 words listed, which are the ones with the largest column means.
+
+```{r}
+tail(sort(colMeans(cluster1)))
+```
+
+We observe that the word "bush" is most frequent word in this cluster. For cluster 2 this are words "november" and "poll".
+
+```{r}
+tail(sort(colMeans(cluster2)))
+```
+
+Next, we can run k-means algorithm, to find new patterns.
+
+```{r}
+k = 7 #seven clusters
+set.seed(1000)
+KMC = kmeans(dailykos, centers = k)
+```
+
+We now subset the `KMC`, as in hierarchical clustering:
+
+```{r}
+dailykosClusters = KMC$cluster
+```
+
+The number observations in each cluster can be determined using sum function:
+```{r}
+sum(dailykosClusters==1)
+sum(dailykosClusters==2)
+sum(dailykosClusters==3)
+sum(dailykosClusters==4)
+sum(dailykosClusters==5)
+sum(dailykosClusters==6)
+sum(dailykosClusters==7)
+
+# or using:
+KmeansCluster = split(dailykos, dailykosClusters)
+#str(KmeansCluster)
+```
+
+It can be observed that cluster 4 and cluster 2 have largest and smallest number of observations. This is, of course, different comparing hierarchical clustering case. Most frequent terms can also be obtained using cobination of `tail`, `sort` and `colMeans`:
+
+```{r}
+KmeansCluster1 = subset(dailykos, KMC$cluster == 1)
+KmeansCluster2 = subset(dailykos, KMC$cluster == 2)
+KmeansCluster3 = subset(dailykos, KMC$cluster == 3)
+KmeansCluster4 = subset(dailykos, KMC$cluster == 4)
+KmeansCluster5 = subset(dailykos, KMC$cluster == 5)
+KmeansCluster6 = subset(dailykos, KMC$cluster == 6)
+KmeansCluster7 = subset(dailykos, KMC$cluster == 7)
+tail(sort(colMeans(KmeansCluster1)))
+```
+
+Comparing these results with hierarchical clustering, we can determine the similarity of each cluster. For example, using the `table` function, we observe that the hierarchical cluster 7 is most similar to K-means cluster 2:
+
+```{r}
+table(clusterGroups, KMC$cluster)
+```
+
+Similarly, it is interesting to note that K-means cluster 6 is almost identical to hierarchical cluster 2. We can also conclude that no more than 123 (39.9%) of the observations in K-Means Cluster 7 fall in any hierarchical cluster.
+
+########################################################################
+
+Problem 2: **MARKET SEGMENTATION FOR AIRLINES**
+
+Market segmentation is a strategy that divides a broad target market of customers into smaller, more similar groups, and then designs a marketing strategy specifically for each group. Clustering is a common technique for market segmentation since it automatically finds similar groups given a data set. 
+
+In this problem, we'll see how clustering can be used to find similar groups of customers who belong to an airline's frequent flyer program. The airline is trying to learn more about its customers so that it can target different customer segments with different types of mileage offers. 
+
+The file AirlinesCluster.csv contains information on 3,999 members of the frequent flyer program. This data comes from the textbook "Data Mining for Business Intelligence," by Galit Shmueli, Nitin R. Patel, and Peter C. Bruce. For more information, see the website for the book <http://www.dataminingbook.com/>.
+
+There are seven different variables in the dataset, described below:
+
+- **Balance** = number of miles eligible for award travel
+- **QualMiles** = number of miles qualifying for TopFlight status
+- **BonusMiles** = number of miles earned from non-flight bonus transactions in the past 12 months
+- **BonusTrans** = number of non-flight bonus transactions in the past 12 months
+- **FlightMiles** = number of flight miles in the past 12 months
+- **FlightTrans** = number of flight transactions in the past 12 months
+- **DaysSinceEnroll** = number of days since enrolled in the frequent flyer program
+
+First,let's load the dataset and look at statistical summary:
+```{r}
+airlines = read.csv("AirlinesCluster.csv")
+str(airlines)
+summary(airlines)
+```
+
+It is obious that firstly we need to normalize the data. If we don't normalize the data, the clustering will be dominated by the variables that are on a larger scale.This is done next in our analysis:
+
+```{r}
+#install.packages("caret")
+library(caret)
+preproc = preProcess(airlines)
+airlinesNorm = predict(preproc, airlines)
+summary(airlinesNorm)
+```
+One can see from the output that FlightMiles now has the largest maximum value, and DaysSinceEnroll now has the smallest minimum value. Note that these were not the variables with the largest and smallest values in the original dataset airlines. Next, we're going to develop hierarchical clustering model:
+
+```{r}
+distance = dist(airlinesNorm, method = "euclidean")
+HierCluster = hclust(distance, method = "ward.D")
+plot(HierCluster)
+```
+
+Looking at the denddogram, we can decide that total number of clusters is from 2 to 7. In the next analysis we'll use k=5 clusters. We can subset the data for each of the cluster as follows:
+
+```{r}
+clusterGroups =cutree(HierCluster, k = 5)
+HierCluster1 = subset(airlinesNorm, clusterGroups == 1)
+HierCluster2 = subset(airlinesNorm, clusterGroups == 2)
+HierCluster3 = subset(airlinesNorm, clusterGroups == 3)
+HierCluster4 = subset(airlinesNorm, clusterGroups == 4)
+HierCluster5 = subset(airlinesNorm, clusterGroups == 5)
+```
+
+We can use `lapply` to compare the average values in each of the variables for the 5 clusters (the centroids of the clusters):
+```{r}
+colMeans(subset(airlines, clusterGroups == 1))
+colMeans(subset(airlines, clusterGroups == 2))
+colMeans(subset(airlines, clusterGroups == 3))
+colMeans(subset(airlines, clusterGroups == 4))
+colMeans(subset(airlines, clusterGroups == 5))
+
+lapply(split(airlines, clusterGroups), colMeans)
+```
+
+We also want to analyze the data using K-means algorithm as follows:
+```{r}
+k = 5 #five clusters
+set.seed(88)
+KMC = kmeans(airlinesNorm, centers = k, iter.max = 1000)
+```
+
+The number of observations in each cluster is easily determined:
+```{r}
+sum(KMC$cluster==1)
+sum(KMC$cluster==2)
+sum(KMC$cluster==3)
+sum(KMC$cluster==4)
+sum(KMC$cluster==5)
+
+# or table(KMC$cluster)
+```
+
+We can compare the cluster centroids to each other either by dividing the data points into groups and then using tapply, or by looking at the output of kmeansClust$centers, where "kmeansClust" is the name of the output of the kmeans function.
+
+```{r}
+colMeans(subset(airlines, KMC$cluster == 1))
+colMeans(subset(airlines, KMC$cluster == 2))
+colMeans(subset(airlines, KMC$cluster == 3))
+colMeans(subset(airlines, KMC$cluster == 4))
+colMeans(subset(airlines, KMC$cluster == 5))
+
+lapply(split(airlines, KMC$cluster), colMeans)
+```
+
+The clusters are not displayed in a meaningful order, so while there may be a cluster produced by the k-means algorithm that is similar to Cluster 1 produced by the Hierarchical method, it will not necessarily be shown first.
