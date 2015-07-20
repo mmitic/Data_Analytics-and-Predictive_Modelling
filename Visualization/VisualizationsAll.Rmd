@@ -1,5 +1,5 @@
 ---
-title: "Vizualizations"
+title: "Visualizations"
 author: "Dr. Marko Mitic"
 output: pdf_document
 ---
